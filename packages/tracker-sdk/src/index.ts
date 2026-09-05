@@ -1,64 +1,36 @@
-import type { TrackEvent } from '@specialist-gtm/shared-types';
-
-export interface TrackerOptions {
-  endpoint?: string;
-}
-
-type Subscriber = (event: TrackEvent) => void;
-
-let counter = 0;
-
-function generateId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  counter += 1;
-  return `evt_${Date.now().toString(36)}_${counter.toString(36)}`;
-}
-
-export class Tracker {
-  private readonly trackKey: string;
-  private readonly endpoint?: string;
-  private readonly subscribers: Subscriber[] = [];
-
-  constructor(trackKey: string, options: TrackerOptions = {}) {
-    this.trackKey = trackKey;
-    this.endpoint = options.endpoint;
-  }
-
-  subscribe(subscriber: Subscriber): () => void {
-    this.subscribers.push(subscriber);
-    return () => {
-      const index = this.subscribers.indexOf(subscriber);
-      if (index >= 0) {
-        this.subscribers.splice(index, 1);
-      }
-    };
-  }
-
-  track(payload: Record<string, unknown>): void {
-    const event: TrackEvent = {
-      id: generateId(),
-      trackKey: this.trackKey,
-      occurredAt: new Date().toISOString(),
-      payload,
-    };
-
-    for (const subscriber of this.subscribers) {
-      subscriber(event);
-    }
-
-    void this.dispatch(event);
-  }
-
-  private async dispatch(event: TrackEvent): Promise<void> {
-    if (this.endpoint === undefined) {
-      return;
-    }
-    await fetch(this.endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(event),
-    });
-  }
-}
+export { autoInit } from './auto-init.js';
+export type { SpecialistGTMGlobal } from './auto-init.js';
+export { parseScriptConfig, readScriptConfig } from './core/config.js';
+export type { TrackerConfig } from './core/config.js';
+export { Tracker, init } from './core/tracker.js';
+export type {
+  InitOptions,
+  TrackEventData,
+  TrackerOptions,
+  TrackerSubscriber,
+} from './core/tracker.js';
+export { FBC_COOKIE, FBP_COOKIE, createFbcValue, createFbpValue, ensureMetaCookies } from './identifiers/meta-cookies.js';
+export type { MetaCookieValues } from './identifiers/meta-cookies.js';
+export {
+  SESSION_COOKIE,
+  SESSION_INACTIVITY_SECONDS,
+  VISITOR_COOKIE,
+  VISITOR_TTL_DAYS,
+  createRandomId,
+  ensureSessionId,
+  ensureVisitorId,
+} from './identifiers/visitor-session.js';
+export {
+  CLICK_ID_PARAMS,
+  TRACKING_PARAMS,
+  TRACKING_PARAMS_COOKIE,
+  TRACKING_PARAMS_TTL_DAYS,
+  UTM_PARAMS,
+  ensureTrackingParams,
+  extractTrackingParams,
+  persistTrackingParams,
+  readTrackingParams,
+} from './params/url-params.js';
+export type { TrackingParamName, TrackingParams } from './params/url-params.js';
+export { CookieStorage, serializeCookie } from './storage/cookie-storage.js';
+export type { CookieOptions } from './storage/cookie-storage.js';

@@ -27,6 +27,7 @@
   "devDependencies": {
     "@specialist-gtm/typescript-config": "workspace:*",
     "eslint": "catalog:",
+    "happy-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
