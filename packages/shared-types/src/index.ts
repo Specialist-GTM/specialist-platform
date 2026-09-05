@@ -13,3 +13,11 @@ export interface TrackEventEnvelope {
   clientKey: string;
   event: TrackEvent;
 }
+
+export * from './schemas/tracker.js';
+export * from './schemas/user.js';
+export * from './schemas/context.js';
+export * from './schemas/destinations.js';
+export * from './schemas/container.js';
+export * from './schemas/envelope.js';
+export * from './validation/validator.js';
