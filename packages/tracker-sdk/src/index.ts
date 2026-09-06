@@ -19,6 +19,15 @@ export { parseWhatsAppUrl } from './detectors/whatsapp.js';
 export type { WhatsAppDetails } from './detectors/whatsapp.js';
 export { hashPii } from './pii/pii-hasher.js';
 export type { HashedUserData, PiiInput } from './pii/pii-hasher.js';
+export { isBeaconSupported, sendViaBeacon } from './transport/beacon-transport.js';
+export { Dispatcher } from './transport/dispatcher.js';
+export {
+  DEFAULT_FLUSH_INTERVAL_MS,
+  DEFAULT_MAX_BATCH_SIZE,
+  EventQueue,
+} from './transport/event-queue.js';
+export type { QueueOptions } from './transport/event-queue.js';
+export { sendViaFetch } from './transport/fetch-transport.js';
 export { extractFormFields, SENSITIVE_FIELD_PATTERNS } from './forms/field-extractor.js';
 export type { ExtractedFormData, FormDetectionSource } from './forms/field-extractor.js';
 export { FetchInterceptor, extractRequestBody } from './forms/fetch-interceptor.js';

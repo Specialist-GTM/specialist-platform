@@ -4,6 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CookieStorage, Tracker, autoInit, init } from '../index.js';
 
 const FBP_PATTERN = /^fb\.1\.\d{13}\.\d{10}$/;
+const ORIGINAL_SEND_BEACON = navigator.sendBeacon;
+
+function stubSendBeacon(result: boolean = false): ReturnType<typeof vi.fn> {
+  const mock = vi.fn(() => result);
+  Object.defineProperty(navigator, 'sendBeacon', {
+    configurable: true,
+    writable: true,
+    value: mock,
+  });
+  return mock;
+}
 
 function customData(event: TrackEvent): Record<string, unknown> {
   return (event.payload.custom_data ?? {}) as Record<string, unknown>;
@@ -31,6 +42,17 @@ describe('Tracker', () => {
       }
     });
     window.localStorage.clear();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    if (ORIGINAL_SEND_BEACON === undefined) {
+      delete (navigator as { sendBeacon?: typeof navigator.sendBeacon }).sendBeacon;
+    } else {
+      Object.defineProperty(navigator, 'sendBeacon', {
+        configurable: true,
+        writable: true,
+        value: ORIGINAL_SEND_BEACON,
+      });
+    }
   });
 
   it('enriches the payload with identifiers and browser context', () => {
@@ -103,25 +125,61 @@ describe('Tracker', () => {
     expect(subscriber).toHaveBeenCalledTimes(1);
   });
 
-  it('dispatches the enriched event to the endpoint', async () => {
+  it('dispatches the enriched event to the endpoint as a batch', async () => {
+    vi.useFakeTimers();
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
+    stubSendBeacon(false);
 
     const tracker = new Tracker('dispatch-key', {
       endpoint: 'https://e.example.com/track',
     });
     tracker.track('PageView');
+    await vi.advanceTimersByTimeAsync(500);
 
-    await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe('https://e.example.com/track');
     expect(init?.method).toBe('POST');
-    const body: TrackEvent = JSON.parse(init?.body as string);
-    expect(body.trackKey).toBe('dispatch-key');
-    expect(body.payload.event_name).toBe('PageView');
-    expect(customData(body)._sgtm_id).toEqual(expect.any(String));
+    expect(init?.headers).toMatchObject({ 'content-type': 'application/json' });
+    const [event] = JSON.parse(init?.body as string) as TrackEvent[];
+    expect(event!.trackKey).toBe('dispatch-key');
+    expect(event!.payload.event_name).toBe('PageView');
+    expect(customData(event!)._sgtm_id).toEqual(expect.any(String));
+    vi.useRealTimers();
+  });
+
+  it('batches two rapid tracks into a single request', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    stubSendBeacon(false);
+
+    const tracker = new Tracker('batch-key', {
+      endpoint: 'https://e.example.com/track',
+    });
+    tracker.track('PageView');
+    tracker.track('Click');
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as TrackEvent[];
+    expect(body.map((event) => event.payload.event_name)).toEqual(['PageView', 'Click']);
+    vi.useRealTimers();
+  });
+
+  it('sends a batch immediately with trackAsync', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    stubSendBeacon(false);
+
+    const tracker = new Tracker('async-key', {
+      endpoint: 'https://e.example.com/track',
+    });
+    await tracker.trackAsync('Lead');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string) as TrackEvent[];
+    expect(body[0]?.payload.event_name).toBe('Lead');
   });
 
   it('does not dispatch when no endpoint is configured', () => {
@@ -132,10 +190,14 @@ describe('Tracker', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('does not throw when dispatch fails', () => {
+  it('does not throw when dispatch fails', async () => {
+    vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    stubSendBeacon(false);
     const tracker = new Tracker('test-key', { endpoint: 'https://e.example.com/track' });
     expect(() => tracker.track('PageView')).not.toThrow();
+    await vi.advanceTimersByTimeAsync(500);
+    vi.useRealTimers();
   });
 
   it('supports programmatic init', () => {
