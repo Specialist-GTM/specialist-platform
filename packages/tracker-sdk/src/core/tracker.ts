@@ -2,6 +2,7 @@ import type { TrackEvent } from '@specialist-gtm/shared-types';
 
 import { ensureMetaCookies } from '../identifiers/meta-cookies.js';
 import { ensureSessionId, ensureVisitorId } from '../identifiers/visitor-session.js';
+import { ClickListener } from '../listeners/click-listener.js';
 import { ensureTrackingParams, extractTrackingParams } from '../params/url-params.js';
 import { CookieStorage } from '../storage/cookie-storage.js';
 
@@ -9,12 +10,14 @@ export interface TrackerOptions {
   endpoint?: string;
   debug?: boolean;
   storage?: CookieStorage;
+  trackClicks?: boolean;
 }
 
 export interface InitOptions {
   key: string;
   endpoint?: string;
   debug?: boolean;
+  trackClicks?: boolean;
 }
 
 export type TrackEventData = {
@@ -47,6 +50,7 @@ export class Tracker {
   private readonly endpoint?: string;
   private readonly debug: boolean;
   private readonly storage: CookieStorage;
+  private readonly clickListener: ClickListener;
   private readonly subscribers = new Set<TrackerSubscriber>();
 
   constructor(trackKey: string, options: TrackerOptions = {}) {
@@ -54,6 +58,18 @@ export class Tracker {
     this.endpoint = options.endpoint;
     this.debug = options.debug ?? false;
     this.storage = options.storage ?? new CookieStorage();
+    this.clickListener = new ClickListener(this);
+    if (options.trackClicks ?? true) {
+      this.clickListener.start();
+    }
+  }
+
+  startClickTracking(): void {
+    this.clickListener.start();
+  }
+
+  stopClickTracking(): void {
+    this.clickListener.stop();
   }
 
   subscribe(subscriber: TrackerSubscriber): () => void {
