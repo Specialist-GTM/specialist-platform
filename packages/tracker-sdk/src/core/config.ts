@@ -3,6 +3,7 @@ export interface TrackerConfig {
   endpoint?: string;
   debug?: boolean;
   trackClicks?: boolean;
+  trackForms?: boolean;
 }
 
 export function parseScriptConfig(script: HTMLScriptElement): TrackerConfig {
@@ -12,6 +13,7 @@ export function parseScriptConfig(script: HTMLScriptElement): TrackerConfig {
     endpoint: data.endpoint || undefined,
     debug: data.debug === 'true' || data.debug === '1' ? true : undefined,
     trackClicks: data.trackClicks === 'false' || data.trackClicks === '0' ? false : undefined,
+    trackForms: data.trackForms === 'false' || data.trackForms === '0' ? false : undefined,
   };
 }
 

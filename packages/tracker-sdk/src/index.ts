@@ -17,6 +17,18 @@ export { parseTelUrl } from './detectors/tel.js';
 export type { TelDetails } from './detectors/tel.js';
 export { parseWhatsAppUrl } from './detectors/whatsapp.js';
 export type { WhatsAppDetails } from './detectors/whatsapp.js';
+export { extractFormFields, SENSITIVE_FIELD_PATTERNS } from './forms/field-extractor.js';
+export type { ExtractedFormData, FormDetectionSource } from './forms/field-extractor.js';
+export { FetchInterceptor, extractRequestBody } from './forms/fetch-interceptor.js';
+export { EMPTY_FIELDS_FINGERPRINT, FormDeduplicator } from './forms/form-deduplicator.js';
+export { FormManager } from './forms/form-manager.js';
+export type { FormSubmission } from './forms/form-manager.js';
+export { MutationDetector, SUCCESS_SELECTORS } from './forms/mutation-detector.js';
+export type { MutationSuccessDetails } from './forms/mutation-detector.js';
+export { SubmitListener } from './forms/submit-listener.js';
+export { checkThankYouPage, THANK_YOU_PATTERNS } from './forms/thank-you-detector.js';
+export type { ThankYouDetection } from './forms/thank-you-detector.js';
+export { XhrInterceptor } from './forms/xhr-interceptor.js';
 export { FBC_COOKIE, FBP_COOKIE, createFbcValue, createFbpValue, ensureMetaCookies } from './identifiers/meta-cookies.js';
 export type { MetaCookieValues } from './identifiers/meta-cookies.js';
 export {
