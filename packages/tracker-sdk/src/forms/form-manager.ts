@@ -3,6 +3,8 @@ import { FetchInterceptor } from './fetch-interceptor.js';
 import { EMPTY_FIELDS_FINGERPRINT, FormDeduplicator } from './form-deduplicator.js';
 import { MutationDetector } from './mutation-detector.js';
 import type { MutationSuccessDetails } from './mutation-detector.js';
+import { hashPii } from '../pii/pii-hasher.js';
+import type { HashedUserData } from '../pii/pii-hasher.js';
 import { SubmitListener } from './submit-listener.js';
 import { checkThankYouPage } from './thank-you-detector.js';
 import { XhrInterceptor } from './xhr-interceptor.js';
@@ -55,14 +57,14 @@ export class FormManager {
     if (this.deduplicator.isDuplicate(this.deduplicator.fingerprintFor(data.fields))) {
       return;
     }
-    this.emit({ ...data, source });
+    void this.emit({ ...data, source });
   }
 
   private handleConfirmation(details: MutationSuccessDetails): void {
     if (this.deduplicator.isDuplicate(EMPTY_FIELDS_FINGERPRINT)) {
       return;
     }
-    this.emit({ fields: {}, source: 'mutation', selector: details.selector, message: details.text });
+    void this.emit({ fields: {}, source: 'mutation', selector: details.selector, message: details.text });
   }
 
   private checkThankYou(): void {
@@ -80,10 +82,24 @@ export class FormManager {
     if (this.deduplicator.isDuplicate(EMPTY_FIELDS_FINGERPRINT)) {
       return;
     }
-    this.emit({ fields: {}, source: 'thank_you', pattern: detection.pattern });
+    void this.emit({ fields: {}, source: 'thank_you', pattern: detection.pattern });
   }
 
-  private emit(submission: FormSubmission): void {
-    this.onSubmission(submission);
+  private async emit(submission: FormSubmission): Promise<void> {
+    let hashed: HashedUserData | undefined;
+    try {
+      hashed = await hashPii({
+        email: submission.email,
+        phone: submission.phone,
+        name: submission.name,
+      });
+    } catch {
+      hashed = undefined;
+    }
+    const result: FormSubmission =
+      hashed !== undefined && Object.keys(hashed).length > 0
+        ? { ...submission, hashed }
+        : submission;
+    this.onSubmission(result);
   }
 }

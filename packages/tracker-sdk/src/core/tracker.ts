@@ -99,23 +99,34 @@ export class Tracker {
   }
 
   track(eventName: string, customData: Record<string, unknown> = {}): void {
+    const event = this.buildEvent(eventName, customData);
+    this.publish(event);
+    void this.dispatch(event);
+  }
+
+  async trackAsync(eventName: string, customData: Record<string, unknown> = {}): Promise<void> {
+    const event = this.buildEvent(eventName, customData);
+    this.publish(event);
+    await this.dispatch(event);
+  }
+
+  private buildEvent(eventName: string, customData: Record<string, unknown>): TrackEvent {
     const eventId = generateEventId();
-    const event: TrackEvent = {
+    return {
       id: eventId,
       trackKey: this.trackKey,
       occurredAt: new Date().toISOString(),
       payload: this.collectEnrichment(eventName, customData, eventId),
     };
+  }
 
+  private publish(event: TrackEvent): void {
     for (const subscriber of this.subscribers) {
       subscriber(event);
     }
-
     if (this.debug) {
       console.debug('[sgtm] track', event);
     }
-
-    void this.dispatch(event);
   }
 
   private collectEnrichment(
@@ -172,17 +183,10 @@ export class Tracker {
       custom.form_action = submission.formAction;
     }
     custom.form_source = submission.source;
-    if (submission.email !== undefined) {
-      custom.email = submission.email;
-    }
-    if (submission.phone !== undefined) {
-      custom.phone = submission.phone;
-    }
-    if (submission.name !== undefined) {
-      custom.name = submission.name;
-    }
-    if (Object.keys(submission.fields).length > 0) {
-      custom.fields = submission.fields;
+
+    const fields = sanitizePayloadFields(submission.fields, submission);
+    if (Object.keys(fields).length > 0) {
+      custom.fields = fields;
     }
     if (submission.selector !== undefined) {
       custom.success_selector = submission.selector;
@@ -192,6 +196,9 @@ export class Tracker {
     }
     if (submission.pattern !== undefined) {
       custom.thank_you_pattern = submission.pattern;
+    }
+    if (submission.hashed !== undefined && Object.keys(submission.hashed).length > 0) {
+      custom.user_data = submission.hashed;
     }
     this.track('FormSubmit', custom);
     this.track('Lead', custom);
@@ -233,4 +240,34 @@ interface BrowserContext {
   userAgent: string | null;
   locale: string | null;
   screenResolution: string | null;
+}
+
+function sanitizePayloadFields(
+  fields: Record<string, string>,
+  submission: FormSubmission,
+): Record<string, string> {
+  const emailNorm = submission.email?.trim().toLowerCase();
+  const nameNorm = submission.name?.trim().toLowerCase();
+  const phoneDigits = submission.phone?.replace(/\D/g, '');
+  const phoneDigitsNoDdi = phoneDigits?.startsWith('55') ? phoneDigits.slice(2) : undefined;
+
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    const valueNorm = value.trim().toLowerCase();
+    if (emailNorm !== undefined && valueNorm === emailNorm) {
+      continue;
+    }
+    if (nameNorm !== undefined && valueNorm === nameNorm) {
+      continue;
+    }
+    const valueDigits = value.replace(/\D/g, '');
+    if (
+      phoneDigits !== undefined &&
+      (valueDigits === phoneDigits || valueDigits === phoneDigitsNoDdi)
+    ) {
+      continue;
+    }
+    result[key] = value;
+  }
+  return result;
 }

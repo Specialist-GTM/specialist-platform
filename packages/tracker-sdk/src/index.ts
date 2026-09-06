@@ -17,6 +17,8 @@ export { parseTelUrl } from './detectors/tel.js';
 export type { TelDetails } from './detectors/tel.js';
 export { parseWhatsAppUrl } from './detectors/whatsapp.js';
 export type { WhatsAppDetails } from './detectors/whatsapp.js';
+export { hashPii } from './pii/pii-hasher.js';
+export type { HashedUserData, PiiInput } from './pii/pii-hasher.js';
 export { extractFormFields, SENSITIVE_FIELD_PATTERNS } from './forms/field-extractor.js';
 export type { ExtractedFormData, FormDetectionSource } from './forms/field-extractor.js';
 export { FetchInterceptor, extractRequestBody } from './forms/fetch-interceptor.js';

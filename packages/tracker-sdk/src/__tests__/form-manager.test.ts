@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FormManager, Tracker } from '../index.js';
 
+const HEX_64 = /^[a-f0-9]{64}$/;
+
 function customData(event: TrackEvent): Record<string, unknown> {
   return (event.payload.custom_data ?? {}) as Record<string, unknown>;
 }
@@ -64,7 +66,7 @@ describe('FormManager', () => {
     vi.unstubAllGlobals();
   });
 
-  it('emits a submission from a native form submit event', () => {
+  it('emits a hashed submission from a native form submit event', async () => {
     const onSubmission = vi.fn();
     const manager = new FormManager(onSubmission);
     manager.start();
@@ -76,6 +78,7 @@ describe('FormManager', () => {
     ]);
     submit(form);
 
+    await vi.waitFor(() => expect(onSubmission).toHaveBeenCalledTimes(1));
     const submission = onSubmission.mock.calls[0]![0];
     expect(submission.source).toBe('submit');
     expect(submission.formId).toBe('form-lead');
@@ -83,10 +86,27 @@ describe('FormManager', () => {
     expect(submission.email).toBe('joao@exemplo.com');
     expect(submission.phone).toBe('11999999999');
     expect(submission.name).toBe('João Silva');
+    expect(submission.hashed.em).toBe('7f32bc621b0f045c9ee21cd6a74bd09b3478062ab8f71e215ac1d201b702b0e9');
+    expect(submission.hashed.email_hash).toBe(submission.hashed.em);
+    expect(submission.hashed.ph).toBe('a869177964cc68954ffec997bbad30769f8a5a6fdc60f296ddbc60b9347dc416');
+    expect(submission.hashed.fn).toBe('ed2befb11499489e2570cb053f774b8ed93e89eddab3f78867a2a5f32c58845e');
+    expect(submission.hashed.ln).toBe('d24e913a4107af875dc2ac3d419798f3794d00434e5059fbb68ac8d33626eaee');
     manager.stop();
   });
 
-  it('deduplicates repeated submits inside the window', () => {
+  it('does not attach hashed data when there is no PII', async () => {
+    const onSubmission = vi.fn();
+    const manager = new FormManager(onSubmission);
+    manager.start();
+
+    submit(buildForm('f0', 'lead', '/api/lead', [['mensagem', 'Olá']]));
+
+    await vi.waitFor(() => expect(onSubmission).toHaveBeenCalledTimes(1));
+    expect(onSubmission.mock.calls[0]![0].hashed).toBeUndefined();
+    manager.stop();
+  });
+
+  it('deduplicates repeated submits inside the window', async () => {
     vi.useFakeTimers();
     const onSubmission = vi.fn();
     const manager = new FormManager(onSubmission);
@@ -97,12 +117,17 @@ describe('FormManager', () => {
       ['telefone', '11999999999'],
     ]);
     submit(form);
+    await vi.waitFor(() => expect(onSubmission).toHaveBeenCalledTimes(1));
+
     submit(form);
+    await vi.advanceTimersByTimeAsync(10);
     expect(onSubmission).toHaveBeenCalledTimes(1);
 
-    vi.advanceTimersByTime(2001);
+    await vi.advanceTimersByTimeAsync(2001);
     submit(form);
-    expect(onSubmission).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(onSubmission).toHaveBeenCalledTimes(2));
+
+    expect(onSubmission.mock.calls[1]![0].source).toBe('submit');
     manager.stop();
   });
 
@@ -154,13 +179,13 @@ describe('FormManager', () => {
     manager.stop();
   });
 
-  it('emits a thank you page submission on start', () => {
+  it('emits a thank you page submission on start', async () => {
     window.history.replaceState({}, '', '/obrigado');
     const onSubmission = vi.fn();
     const manager = new FormManager(onSubmission);
     manager.start();
 
-    expect(onSubmission).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(onSubmission).toHaveBeenCalledTimes(1));
     const submission = onSubmission.mock.calls[0]![0];
     expect(submission.source).toBe('thank_you');
     expect(submission.fields).toEqual({});
@@ -178,7 +203,7 @@ describe('FormManager', () => {
     manager.stop();
   });
 
-  it('emits FormSubmit and Lead through the Tracker', () => {
+  it('emits FormSubmit and Lead without plaintext PII and with user_data', async () => {
     const tracker = newTracker();
     const events = subscribe(tracker);
 
@@ -186,19 +211,59 @@ describe('FormManager', () => {
       ['nome', 'João Silva'],
       ['email', 'joao@exemplo.com'],
       ['telefone', '11999999999'],
+      ['mensagem', 'Olá'],
     ]);
     submit(form);
 
-    expect(events.map((event) => event.payload.event_name)).toEqual(['FormSubmit', 'Lead']);
+    await vi.waitFor(() => expect(events.length).toBe(2));
     const data = customData(events[0]!);
+    expect(events.map((event) => event.payload.event_name)).toEqual(['FormSubmit', 'Lead']);
     expect(data.form_id).toBe('form-lead');
     expect(data.form_source).toBe('submit');
-    expect(data.email).toBe('joao@exemplo.com');
-    expect(data.phone).toBe('11999999999');
-    expect(data.fields).toMatchObject({ nome: 'João Silva' });
+    expect(data.email).toBeUndefined();
+    expect(data.phone).toBeUndefined();
+    expect(data.name).toBeUndefined();
+    expect(data.fields).toEqual({ mensagem: 'Olá' });
+
+    const userData = data.user_data as Record<string, string>;
+    expect(userData.em).toMatch(HEX_64);
+    expect(userData.email_hash).toBe(userData.em);
+    expect(userData.ph).toMatch(HEX_64);
+    expect(userData.phone_number_hash).toBe(userData.ph);
+    expect(userData.fn).toMatch(HEX_64);
+    expect(userData.ln).toMatch(HEX_64);
+
+    const payload = JSON.stringify(events[0]!.payload);
+    expect(payload).not.toContain('joao@exemplo.com');
+    expect(payload).not.toContain('11999999999');
+    expect(payload).not.toContain('João Silva');
   });
 
-  it('does not track forms when trackForms is disabled', () => {
+  it('never exposes sensitive fields like password in the payload', async () => {
+    const tracker = newTracker();
+    const events = subscribe(tracker);
+
+    const form = buildForm('f-sec', 'login', '/api/login', [
+      ['email', 'joao@exemplo.com'],
+      ['password', 'hunter2'],
+      ['card_number', '4111111111111111'],
+      ['cvv', '123'],
+    ]);
+    submit(form);
+
+    await vi.waitFor(() => expect(events.length).toBe(2));
+    const payload = JSON.stringify(events[0]!.payload);
+    expect(payload).not.toContain('4111111111111111');
+    expect(payload).not.toContain('hunter2');
+    expect(payload).not.toContain('123');
+    expect(payload).not.toContain('joao@exemplo.com');
+
+    const userData = customData(events[0]!).user_data as Record<string, string>;
+    expect(userData).not.toHaveProperty('password_hash');
+    expect(userData).not.toHaveProperty('card_hash');
+  });
+
+  it('does not track forms when trackForms is disabled', async () => {
     const tracker = newTracker({ trackForms: false });
     const events = subscribe(tracker);
 
@@ -207,6 +272,7 @@ describe('FormManager', () => {
 
     tracker.startFormTracking();
     submit(document.querySelector<HTMLFormElement>('#f')!);
+    await vi.waitFor(() => expect(events.length).toBe(2));
     expect(events.map((event) => event.payload.event_name)).toEqual(['FormSubmit', 'Lead']);
   });
 

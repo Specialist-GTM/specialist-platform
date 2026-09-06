@@ -1,3 +1,4 @@
+import type { HashedUserData } from '../pii/pii-hasher.js';
 import { sanitizePhone } from '../utils/phone.js';
 
 export type FormDetectionSource = 'submit' | 'fetch' | 'xhr' | 'mutation' | 'thank_you';
@@ -10,6 +11,7 @@ export interface ExtractedFormData {
   email?: string;
   phone?: string;
   name?: string;
+  hashed?: HashedUserData;
 }
 
 export const SENSITIVE_FIELD_PATTERNS = [
