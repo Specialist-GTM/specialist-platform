@@ -2,6 +2,8 @@ import type { TrackEvent } from '@specialist-gtm/shared-types';
 
 import { ensureMetaCookies } from '../identifiers/meta-cookies.js';
 import { ensureSessionId, ensureVisitorId } from '../identifiers/visitor-session.js';
+import { FormManager } from '../forms/form-manager.js';
+import type { FormSubmission } from '../forms/form-manager.js';
 import { ClickListener } from '../listeners/click-listener.js';
 import { ensureTrackingParams, extractTrackingParams } from '../params/url-params.js';
 import { CookieStorage } from '../storage/cookie-storage.js';
@@ -11,6 +13,7 @@ export interface TrackerOptions {
   debug?: boolean;
   storage?: CookieStorage;
   trackClicks?: boolean;
+  trackForms?: boolean;
 }
 
 export interface InitOptions {
@@ -18,6 +21,7 @@ export interface InitOptions {
   endpoint?: string;
   debug?: boolean;
   trackClicks?: boolean;
+  trackForms?: boolean;
 }
 
 export type TrackEventData = {
@@ -51,6 +55,7 @@ export class Tracker {
   private readonly debug: boolean;
   private readonly storage: CookieStorage;
   private readonly clickListener: ClickListener;
+  private readonly formManager: FormManager;
   private readonly subscribers = new Set<TrackerSubscriber>();
 
   constructor(trackKey: string, options: TrackerOptions = {}) {
@@ -62,6 +67,12 @@ export class Tracker {
     if (options.trackClicks ?? true) {
       this.clickListener.start();
     }
+    this.formManager = new FormManager((submission) => {
+      this.trackFormEvent(submission);
+    });
+    if (options.trackForms ?? true) {
+      this.formManager.start();
+    }
   }
 
   startClickTracking(): void {
@@ -70,6 +81,14 @@ export class Tracker {
 
   stopClickTracking(): void {
     this.clickListener.stop();
+  }
+
+  startFormTracking(): void {
+    this.formManager.start();
+  }
+
+  stopFormTracking(): void {
+    this.formManager.stop();
   }
 
   subscribe(subscriber: TrackerSubscriber): () => void {
@@ -139,6 +158,43 @@ export class Tracker {
       timestamp: Date.now(),
       custom_data: enrichment,
     };
+  }
+
+  private trackFormEvent(submission: FormSubmission): void {
+    const custom: Record<string, unknown> = {};
+    if (submission.formId !== undefined) {
+      custom.form_id = submission.formId;
+    }
+    if (submission.formName !== undefined) {
+      custom.form_name = submission.formName;
+    }
+    if (submission.formAction !== undefined) {
+      custom.form_action = submission.formAction;
+    }
+    custom.form_source = submission.source;
+    if (submission.email !== undefined) {
+      custom.email = submission.email;
+    }
+    if (submission.phone !== undefined) {
+      custom.phone = submission.phone;
+    }
+    if (submission.name !== undefined) {
+      custom.name = submission.name;
+    }
+    if (Object.keys(submission.fields).length > 0) {
+      custom.fields = submission.fields;
+    }
+    if (submission.selector !== undefined) {
+      custom.success_selector = submission.selector;
+    }
+    if (submission.message !== undefined) {
+      custom.success_message = submission.message;
+    }
+    if (submission.pattern !== undefined) {
+      custom.thank_you_pattern = submission.pattern;
+    }
+    this.track('FormSubmit', custom);
+    this.track('Lead', custom);
   }
 
   private readBrowserContext(): BrowserContext {
