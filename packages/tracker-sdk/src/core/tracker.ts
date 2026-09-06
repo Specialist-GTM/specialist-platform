@@ -7,6 +7,7 @@ import type { FormSubmission } from '../forms/form-manager.js';
 import { ClickListener } from '../listeners/click-listener.js';
 import { ensureTrackingParams, extractTrackingParams } from '../params/url-params.js';
 import { CookieStorage } from '../storage/cookie-storage.js';
+import { Dispatcher } from '../transport/dispatcher.js';
 
 export interface TrackerOptions {
   endpoint?: string;
@@ -51,18 +52,20 @@ export function init(options: InitOptions): Tracker {
 
 export class Tracker {
   private readonly trackKey: string;
-  private readonly endpoint?: string;
   private readonly debug: boolean;
   private readonly storage: CookieStorage;
   private readonly clickListener: ClickListener;
   private readonly formManager: FormManager;
+  private readonly dispatcher?: Dispatcher;
   private readonly subscribers = new Set<TrackerSubscriber>();
 
   constructor(trackKey: string, options: TrackerOptions = {}) {
     this.trackKey = trackKey;
-    this.endpoint = options.endpoint;
     this.debug = options.debug ?? false;
     this.storage = options.storage ?? new CookieStorage();
+    if (options.endpoint !== undefined) {
+      this.dispatcher = new Dispatcher(options.endpoint);
+    }
     this.clickListener = new ClickListener(this);
     if (options.trackClicks ?? true) {
       this.clickListener.start();
@@ -101,13 +104,16 @@ export class Tracker {
   track(eventName: string, customData: Record<string, unknown> = {}): void {
     const event = this.buildEvent(eventName, customData);
     this.publish(event);
-    void this.dispatch(event);
+    this.dispatcher?.enqueue(event);
   }
 
   async trackAsync(eventName: string, customData: Record<string, unknown> = {}): Promise<void> {
     const event = this.buildEvent(eventName, customData);
     this.publish(event);
-    await this.dispatch(event);
+    if (this.dispatcher === undefined) {
+      return;
+    }
+    await this.dispatcher.sendNow(event);
   }
 
   private buildEvent(eventName: string, customData: Record<string, unknown>): TrackEvent {
@@ -214,23 +220,6 @@ export class Tracker {
       locale: browser?.navigator.language ?? null,
       screenResolution: screen ? `${screen.width}x${screen.height}` : null,
     };
-  }
-
-  private async dispatch(event: TrackEvent): Promise<void> {
-    if (this.endpoint === undefined) {
-      return;
-    }
-    try {
-      await fetch(this.endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(event),
-      });
-    } catch {
-      if (this.debug) {
-        console.warn('[sgtm] dispatch failed', this.endpoint);
-      }
-    }
   }
 }
 
