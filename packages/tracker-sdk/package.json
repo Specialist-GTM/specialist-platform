@@ -15,10 +15,12 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node ../../scripts/clean.mjs dist && rollup -c",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "size-limit": "size-limit",
+    "prepare-cdn": "node scripts/prepare-cdn.mjs",
     "clean": "node ../../scripts/clean.mjs dist coverage"
   },
   "dependencies": {
@@ -26,9 +28,16 @@
     "@specialist-gtm/shared-types": "workspace:*"
   },
   "devDependencies": {
+    "@rollup/plugin-node-resolve": "catalog:",
+    "@rollup/plugin-terser": "catalog:",
+    "@rollup/plugin-typescript": "catalog:",
+    "@size-limit/file": "catalog:",
     "@specialist-gtm/typescript-config": "workspace:*",
+    "@types/node": "catalog:",
     "eslint": "catalog:",
     "happy-dom": "catalog:",
+    "rollup": "catalog:",
+    "size-limit": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
