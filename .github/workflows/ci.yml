@@ -45,3 +45,6 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Bundle Size Check (< 12 KB Gzip)
+        run: pnpm run size-limit
