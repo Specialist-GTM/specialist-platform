@@ -47,13 +47,14 @@
       ]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "build"],
       "inputs": [
         "app/**/*",
         "src/**/*",
         "next-env.d.ts",
         "next.config.mjs",
         "package.json",
+        "rollup.config.mjs",
         "tsconfig.json"
       ]
     },
