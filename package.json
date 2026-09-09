@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "size-limit": "turbo run size-limit",
     "format": "prettier --write .",
     "clean": "node scripts/clean.mjs .turbo"
   },

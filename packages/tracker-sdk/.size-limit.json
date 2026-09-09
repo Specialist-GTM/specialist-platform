@@ -1,0 +1,9 @@
+[
+  {
+    "name": "CDN Standalone Bundle (v1/track.js)",
+    "path": "dist/v1/track.js",
+    "limit": "12 KB",
+    "brotli": false,
+    "gzip": true
+  }
+]

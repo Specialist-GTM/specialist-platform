@@ -9,9 +9,21 @@
         "next-env.d.ts",
         "next.config.mjs",
         "package.json",
+        "rollup.config.mjs",
+        "scripts/**",
         "tsconfig.json"
       ],
       "outputs": ["dist/**", ".next/**"]
+    },
+    "size-limit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**/*",
+        ".size-limit.json",
+        "package.json",
+        "rollup.config.mjs",
+        "tsconfig.json"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],
@@ -35,13 +47,14 @@
       ]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "build"],
       "inputs": [
         "app/**/*",
         "src/**/*",
         "next-env.d.ts",
         "next.config.mjs",
         "package.json",
+        "rollup.config.mjs",
         "tsconfig.json"
       ]
     },
